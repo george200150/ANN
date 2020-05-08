@@ -32,23 +32,59 @@ our_secret_bitmap = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
           0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
           0,0,0,0,0,0,0,0,0,0,0,0,0,0]
 
-def writeBitmapToTempImage(bitmap):
+# trash?
+'''def writeBitmapToTempImage(bitmap):
     bitmap = [[pixel,pixel,pixel] for pixel in bitmap]
     bitmap = np.asarray(bitmap).reshape([28,28,3])    
     cv2.imwrite("one1.png", bitmap)
 
 def readIntoRGBGrayscale():
     bitmap = cv2.imread('one1.png')
-    return bitmap
+    return bitmap'''
 
 def liniarize_image(bitmap):
-    liniar = bitmap.reshape([100,-1])
+    """
+    flattens any image of any shape into a 1D numpy array
+    """
+    liniar = bitmap.reshape([-1,1])
     #liniar = liniar.tolist()
     return liniar
 
 
+
+def distanceFromSepia(bitmap):
+    """
+    creates a sepia copy of the bitmap, then compares every pixel from the original image to its sepia corespondent
+    @return: bitmap of pixels between -2 and 1 ... I guess..
+    """
+    sepia = toSepia(bitmap)
+    img = []
+    for lineB,lineS in zip(bitmap,sepia):
+        for pixel,pixelSepia in zip(lineB,lineS):
+            r = pixel[0] * 1.0
+            g = pixel[1] * 1.0
+            b = pixel[2] * 1.0
+            
+            rSepia = pixelSepia[0] * 1.0
+            gSepia = pixelSepia[1] * 1.0
+            bSepia = pixelSepia[2] * 1.0
+            
+            rDelta = abs(r-rSepia)
+            gDelta = abs(g-gSepia)
+            bDelta = abs(b-bSepia)
+            
+            chromatic_distance = 1 - (rDelta + gDelta + bDelta) / 255
+            img.append(chromatic_distance)
+    img = np.asarray(img).reshape([100,1])
+    return img
+
+
+# constant value of what is defined as the perfect sepia value
 absolute_sepia = np.array([201,179,140])
 def distanceToAbsoluteSepia_image(bitmap):
+    """
+    Converts RGB pixels into 1 - (distance from the absolute sepia RGB constant)
+    """
     img = []
     for line in bitmap:
         for pixel in line:
@@ -61,31 +97,45 @@ def distanceToAbsoluteSepia_image(bitmap):
     img = np.asarray(img).reshape([100,1])
     return img
 
-def sepia_mask(img):
+
+# trash?
+'''def sepia_mask(img):
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     sepia_lower = np.array([np.round( 30 / 2), np.round(0.10 * 255), np.round(0.10 * 255)])
     sepia_upper = np.array([np.round( 45 / 2), np.round(0.60 * 255), np.round(0.90 * 255)])
-    return cv2.inRange(hsv, sepia_lower, sepia_upper)
+    return cv2.inRange(hsv, sepia_lower, sepia_upper)'''
 
-def readIntoSepia():
+
+# trash?
+'''def readIntoSepia():
     sepia_kernel = np.array([[0.272, 0.534, 0.131],[0.349, 0.686, 0.168], [0.393, 0.769, 0.189]])
     bitmap = cv2.imread('one1.png')
     bitmap = np.flip(np.array(bitmap), 2)
     sepia = cv2.transform(bitmap, sepia_kernel)
     cv2.imshow("sepia", sepia)
     cv2.waitKey(0)
-    return sepia
+    return sepia'''
 
 
+# sepia kernel for the transformation
 sepia_kernel = np.array([[0.272, 0.534, 0.131],[0.349, 0.686, 0.168], [0.393, 0.769, 0.189]])
 
 def toSepia(photo):
+    """
+    Algebraic filter that converts any image of any size to its sepia version. 
+    @param photo: cv2 image 
+    @return: sepia cv2 image
+    """
     sepia = cv2.transform(photo, sepia_kernel)
     #cv2.imshow("sepia", sepia)
     #cv2.waitKey(0)
     return sepia
 
 def reshape_dataset_only_once_call_ever():
+    """
+    load the pokemon images from "images" directory based on the names written on each line of "pokemon.csv"
+    and reshapes all the images into 10x10 images and saves normal and sepia versions of each in "resized" directory.
+    """
     f = open('pokemon.csv', 'r')
     line = f.readline() # ignore first line
     while True:
@@ -103,6 +153,10 @@ def reshape_dataset_only_once_call_ever():
 
 
 def loadPokemons():
+    """
+    load the pokemon images from "images" directory based on the names written on each line of "pokemon.csv"
+    (may throw some errors, but I've covered the edge cases... it does its job nonetheless)
+    """
     f = open('pokemon.csv', 'r')
     line = f.readline() # ignore first line
     
@@ -148,10 +202,29 @@ def loadPokemons():
 
 
 
+def processImage(img):
+    """
+    Here we can choose how to customize the input for the network
+        -distanceToAbsoluteSepia_image will reduce RGB to a single float32 value between -1? .. 1
+        that represents how close to being an "absolute sepia" the RGB pixel is
+    
+        -liniarize_image will flatten any image of any shape to a list of shape == [-1,1]
+        
+        -pixel/255 will reduce from [0..255] uint8 RGB values to floats32-s in [0,1] 
+    """
+    #img = distanceToAbsoluteSepia_image(img)
+    img = distanceFromSepia(img)
+    img = liniarize_image(img)
+    #img = np.asarray([pixel/255 for pixel in img])
+    return img
+
 
 
 
 def loadImagesSimple():
+    """
+    Load all 440 images (220 normal + 220 sepia) from the "resized" folder 
+    """
     
     training_inputs = []
     training_results = []
@@ -161,18 +234,14 @@ def loadImagesSimple():
         if img is None:
             continue
         
-        img = distanceToAbsoluteSepia_image(img)
-        img = liniarize_image(img)
-        #img = np.asarray([pixel/255 for pixel in img])
-        training_inputs.append(img)
-        training_results.append(0)
+        img = processImage(img)
+        training_inputs.append(img) # flatten from tuples of rgb to normal list
+        training_results.append(0) # append in the result a marker that the image IS NOT SEPIA 
         
         img = cv2.imread('resized/images'+str(index)+"_sepia.png")
-        img = distanceToAbsoluteSepia_image(img)
-        img = liniarize_image(img)
-        #img = np.asarray([pixel/255 for pixel in img])
+        img = processImage(img)
         training_inputs.append(img)
-        training_results.append(1)
+        training_results.append(1) # append in the result a marker that the image IS SEPIA
         
     training_data = zip(training_inputs, training_results)
     
@@ -208,7 +277,13 @@ def loadImagesSimple():
 
 
 def get_random_crop(image, crop_height, crop_width):
-
+    """
+    Creates a random sub-image of crop_height x crop_width from anywhere in the base image
+    @param image: cv2 image
+    @param crop_height: positive integer smaller than the base image height
+    @param crop_width: positive integer smaller than the base image width
+    @return: cropped cv2 image
+    """
     max_x = image.shape[1] - crop_width
     max_y = image.shape[0] - crop_height
 
@@ -222,10 +297,14 @@ def get_random_crop(image, crop_height, crop_width):
 
 
 def gener8Dataset():
+    """
+    transforms the input images ("base_photos" directory) from Google images into 20 cropped 10x10 images (10 normal and 10 sepia)
+    writes the images to the "resized" directory. (does not conflict with whatever images already exist there)
+    """
     counter = 220
     
     for imageCounter in range(1,12):
-        example_image = cv2.imread('images (' + str(imageCounter) + ').jpg')
+        example_image = cv2.imread('base_photos/images (' + str(imageCounter) + ').jpg')
         #example_image = np.random.randint(0, 256, (1024, 1024, 3))
         
         for _ in range(10):
